@@ -1,0 +1,24 @@
+# sshd_config.example
+# This is a *focused* example showing the lines that matter for PAM MFA.
+# Merge carefully with your distro defaults.
+
+# Ensure PAM is used (required for pam_google_authenticator + pam_access):
+UsePAM yes
+
+# Allow interactive auth so PAM can prompt for TOTP:
+# NOTE: On newer OpenSSH, use KbdInteractiveAuthentication instead of ChallengeResponseAuthentication.
+ChallengeResponseAuthentication yes
+KbdInteractiveAuthentication yes
+
+# If you require TOTP + password, you generally need password auth enabled:
+PasswordAuthentication yes
+
+# Example policy (matches common lab setups):
+# - Either (publickey + password) OR (publickey + keyboard-interactive)
+# - If pam_google_authenticator is in the PAM auth stack, both interactive flows will require TOTP.
+AuthenticationMethods publickey,password publickey,keyboard-interactive
+
+# Hardening suggestions (tune for your environment)
+PermitRootLogin no
+MaxAuthTries 3
+LoginGraceTime 30

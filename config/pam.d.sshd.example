@@ -1,0 +1,18 @@
+# pam.d/sshd.example
+# Insert these lines into /etc/pam.d/sshd (order matters).
+
+# --- MFA: Google Authenticator (TOTP) ---
+# Enforce TOTP for SSH logins:
+#   - Remove 'nullok' to require MFA for *all* users.
+#   - Use 'nullok' only for staged rollouts.
+auth required pam_google_authenticator.so
+
+# --- Access controls: pam_access ---
+# Enforce /etc/security/access.conf rules
+account required pam_access.so
+
+# --- Optional: time-based login controls ---
+# Enforce /etc/security/time.conf rules (PAM account management)
+# account required pam_time.so
+
+# Keep your distro’s existing includes below (e.g., common-auth/common-account).

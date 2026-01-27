@@ -1,0 +1,191 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Applies PAM SSH MFA + pam_access policy with backups.
+# Tested for Debian/Kali/Ubuntu style layouts.
+
+TS="$(date +%Y%m%d_%H%M%S)"
+BACKUP_DIR="/var/backups/pam-ssh-mfa-hardening/${TS}"
+
+need_root() {
+  if [[ "${EUID}" -ne 0 ]]; then
+    echo "[!] Run as root (sudo)." >&2
+    exit 1
+  fi
+}
+
+detect_service() {
+  if command -v systemctl >/dev/null 2>&1; then
+    if systemctl list-units --type=service | grep -qE '(^|\s)ssh\.service'; then
+      echo "ssh"
+      return
+    fi
+    if systemctl list-units --type=service | grep -qE '(^|\s)sshd\.service'; then
+      echo "sshd"
+      return
+    fi
+  fi
+  echo "ssh"
+}
+
+backup_file() {
+  local f="$1"
+  if [[ -f "$f" ]]; then
+    mkdir -p "${BACKUP_DIR}"
+    cp -a "$f" "${BACKUP_DIR}/"
+    echo "[+] Backed up $f -> ${BACKUP_DIR}/"
+  else
+    echo "[i] Skipping backup (missing): $f"
+  fi
+}
+
+ensure_line_before_match() {
+  # ensure_line_before_match <file> <line_to_ensure> <regex_anchor>
+  local f="$1"
+  local line="$2"
+  local anchor="$3"
+
+  if grep -Fqx "$line" "$f"; then
+    return
+  fi
+
+  if grep -Eq "$anchor" "$f"; then
+    # insert before first anchor match
+    local tmp
+    tmp="$(mktemp)"
+    awk -v ins="$line" -v re="$anchor" '
+      BEGIN{done=0}
+      {
+        if(!done && $0 ~ re){ print ins; done=1 }
+        print
+      }
+      END{ if(!done) print ins }
+    ' "$f" > "$tmp"
+    cat "$tmp" > "$f"
+    rm -f "$tmp"
+  else
+    echo "$line" >> "$f"
+  fi
+}
+
+set_sshd_directive() {
+  # set_sshd_directive <file> <Key> <Value>
+  local f="$1"
+  local key="$2"
+  local val="$3"
+
+  if grep -Eq "^[#\s]*${key}\b" "$f"; then
+    # replace first occurrence (commented or not)
+    sed -i -E "0,/^[#\s]*${key}\b.*/s//${key} ${val}/" "$f"
+  else
+    echo "${key} ${val}" >> "$f"
+  fi
+}
+
+main() {
+  need_root
+
+  # Dependencies: best-effort check
+  if ! command -v google-authenticator >/dev/null 2>&1; then
+    echo "[i] google-authenticator binary not found. Installing libpam-google-authenticator..."
+    apt-get update -y
+    apt-get install -y libpam-google-authenticator
+  fi
+
+  local PAM_SSHD="/etc/pam.d/sshd"
+  local SSHD_CONF="/etc/ssh/sshd_config"
+  local ACCESS_CONF="/etc/security/access.conf"
+
+  backup_file "$PAM_SSHD"
+  backup_file "$SSHD_CONF"
+  backup_file "$ACCESS_CONF"
+
+  # ---- PAM: enforce MFA and pam_access ----
+  if [[ ! -f "$PAM_SSHD" ]]; then
+    echo "[!] Missing $PAM_SSHD. Is openssh-server installed?" >&2
+    exit 1
+  fi
+
+  # Ensure TOTP line appears BEFORE common-auth include (prompt order: verification code then password)
+  ensure_line_before_match "$PAM_SSHD" "auth required pam_google_authenticator.so" "^@include[[:space:]]+common-auth"
+
+  # Ensure pam_access in account stack (before common-account include)
+  ensure_line_before_match "$PAM_SSHD" "account required pam_access.so" "^@include[[:space:]]+common-account"
+
+  # ---- access.conf policy ----
+  if [[ ! -f "$ACCESS_CONF" ]]; then
+    touch "$ACCESS_CONF"
+    chmod 0644 "$ACCESS_CONF"
+  fi
+
+  # If file is empty (or only comments), seed with example policy block.
+  if ! grep -Eq '^[[:space:]]*[+-][[:space:]]*:' "$ACCESS_CONF"; then
+    cat >> "$ACCESS_CONF" <<'EOF'
+
+# === Seeded by pam-ssh-mfa-hardening-lab ===
+# Format: (+/-) : users : origins
+# First match wins. Order is critical.
++ : @ssh_admins : 10.8.0.0/255.255.255.0
++ : @ssh_admins : 172.16.10.0/255.255.255.0
++ : @ssh_admins : LOCAL
+- : @ssh_admins : ALL
+
++ : @ssh_engineering : 10.8.0.0/255.255.255.0
++ : @ssh_engineering : 192.168.64.0/255.255.255.0
++ : @ssh_engineering : 10.20.0.0/255.255.0.0
+- : @ssh_engineering : ALL
+
++ : @ssh_students : 10.20.0.0/255.255.0.0
++ : @ssh_students : 192.168.64.0/255.255.255.0
+- : @ssh_students : ALL
+
++ : @ssh_service : 192.168.10.0/255.255.255.0
++ : @ssh_service : 172.16.10.0/255.255.255.0
+- : @ssh_service : ALL
+
++ : root : LOCAL
++ : root : 10.8.0.0/255.255.255.0
+- : root : ALL
+
+- : ALL : ALL
+# === End seeded block ===
+EOF
+    echo "[+] Seeded $ACCESS_CONF with example policy block."
+  else
+    echo "[i] $ACCESS_CONF already has rules; leaving as-is."
+  fi
+
+  # ---- sshd_config ----
+  if [[ ! -f "$SSHD_CONF" ]]; then
+    echo "[!] Missing $SSHD_CONF. Is openssh-server installed?" >&2
+    exit 1
+  fi
+
+  set_sshd_directive "$SSHD_CONF" "UsePAM" "yes"
+  set_sshd_directive "$SSHD_CONF" "KbdInteractiveAuthentication" "yes"
+  set_sshd_directive "$SSHD_CONF" "ChallengeResponseAuthentication" "yes"
+  set_sshd_directive "$SSHD_CONF" "PasswordAuthentication" "yes"
+
+  # Set AuthenticationMethods (add if absent).
+  # This is a lab-friendly example; tune for your real policy.
+  if ! grep -Eq "^[#\s]*AuthenticationMethods\b" "$SSHD_CONF"; then
+    echo "AuthenticationMethods publickey,password publickey,keyboard-interactive" >> "$SSHD_CONF"
+  fi
+
+  # Restart ssh
+  local svc
+  svc="$(detect_service)"
+  echo "[+] Restarting ${svc}..."
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl restart "${svc}"
+    systemctl --no-pager status "${svc}" || true
+  else
+    service "${svc}" restart || true
+  fi
+
+  echo
+  echo "[✓] Applied. Backups: ${BACKUP_DIR}"
+  echo "[✓] Next: run audit -> sudo ./scripts/audit_pam_ssh_mfa.py"
+}
+
+main "$@"

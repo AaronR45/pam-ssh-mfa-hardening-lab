@@ -1,0 +1,11 @@
+# Private lab evidence (do not publish)
+private/
+# OS / editor
+.DS_Store
+*.swp
+*.swo
+*.bak
+# Python
+__pycache__/
+*.pyc
+.venv/

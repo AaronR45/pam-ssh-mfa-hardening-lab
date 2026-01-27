@@ -1,0 +1,12 @@
+# time.conf.example
+# Format: services ; ttys ; users ; times
+# First match wins. Order matters.
+
+# Example based on a simple lab test:
+# Deny 'testuser' logins outside 17:00–24:00 (All days).
+# Note: The '!' operator in the time field inverts the match (deny/allow)
+# depending on your intended policy—test carefully.
+login ; * ; testuser ; !Al1700-2400
+
+# Allow everything else (default)
+# login ; * ; * ; Al0000-2400

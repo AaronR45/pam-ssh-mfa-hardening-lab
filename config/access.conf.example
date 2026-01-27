@@ -1,0 +1,34 @@
+# access.conf.example
+# Format: (+/-) : users : origins
+# First match wins. Order is critical.
+# Networks use net/mask format for broad compatibility.
+
+# === ssh_admins (VPN + jumpbox + local only) ===
++ : @ssh_admins : 10.8.0.0/255.255.255.0
++ : @ssh_admins : 172.16.10.0/255.255.255.0
++ : @ssh_admins : LOCAL
+- : @ssh_admins : ALL
+
+# === ssh_engineering (VPN + lab + campus) ===
++ : @ssh_engineering : 10.8.0.0/255.255.255.0
++ : @ssh_engineering : 192.168.64.0/255.255.255.0
++ : @ssh_engineering : 10.20.0.0/255.255.0.0
+- : @ssh_engineering : ALL
+
+# === ssh_students (campus + lab only) ===
++ : @ssh_students : 10.20.0.0/255.255.0.0
++ : @ssh_students : 192.168.64.0/255.255.255.0
+- : @ssh_students : ALL
+
+# === ssh_service (mgmt + jumpbox only) ===
++ : @ssh_service : 192.168.10.0/255.255.255.0
++ : @ssh_service : 172.16.10.0/255.255.255.0
+- : @ssh_service : ALL
+
+# === root (local + VPN only) ===
++ : root : LOCAL
++ : root : 10.8.0.0/255.255.255.0
+- : root : ALL
+
+# === catch-all ===
+- : ALL : ALL

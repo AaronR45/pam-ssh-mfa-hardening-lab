@@ -1,0 +1,37 @@
+{
+  "groups": {
+    "admin1": [
+      "ssh_admins"
+    ],
+    "admin2": [
+      "ssh_admins"
+    ],
+    "eng1": [
+      "ssh_engineering"
+    ],
+    "eng2": [
+      "ssh_engineering"
+    ],
+    "student1": [
+      "ssh_students"
+    ],
+    "student2": [
+      "ssh_students"
+    ],
+    "svc1": [
+      "ssh_service"
+    ],
+    "svc2": [
+      "ssh_service"
+    ]
+  },
+  "networks": {
+    "VPN_NET": "10.8.0.0/24",
+    "JUMP_NET": "172.16.10.0/24",
+    "LAB_NET": "192.168.64.0/24",
+    "CAMPUS_NET": "10.20.0.0/16",
+    "MGMT_NET": "192.168.10.0/24"
+  },
+  "matrix_rows": 24,
+  "note": "This file is informational; validation uses the CSV expected column."
+}
