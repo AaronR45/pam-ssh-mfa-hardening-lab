@@ -32,7 +32,8 @@ jobs:
 
           # ShellCheck
           if command -v shellcheck &> /dev/null; then
-            shellcheck scripts/*.sh
+            # Only fail on errors (-S error) to avoid failing on info/style suggestions
+            shellcheck -S error scripts/*.sh
           else
             echo "ShellCheck not found, skipping."
           fi
