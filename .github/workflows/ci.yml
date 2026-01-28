@@ -13,32 +13,41 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
-          cache: 'pip'
+          python-version: "3.10"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
 
       - name: Linting
         run: |
-          pip install flake8
+          pip install -r requirements.txt
+
           # Stop the build if there are Python syntax errors or undefined names
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+
           # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
-          # ShellCheck
+          # ShellCheck (fail only on real errors, not info/warn)
           if command -v shellcheck &> /dev/null; then
-            shellcheck scripts/*.sh
+            shellcheck -S error scripts/*.sh
           else
             echo "ShellCheck not found, skipping."
           fi
 
       - name: Offline access policy validation
         run: |
-          python3 ./scripts/validate_access_conf.py             --access-conf ./config/access.conf.example             --matrix ./tests/test_matrix.csv
+          python3 ./scripts/validate_access_conf.py \
+            --access-conf ./config/access.conf.example \
+            --matrix ./tests/test_matrix.csv
 
       - name: Fixture-based audit (no sudo required)
         run: |
-          python3 ./scripts/audit_pam_ssh_mfa.py             --root ./fixtures             --expected-access-rules 18
+          python3 ./scripts/audit_pam_ssh_mfa.py \
+            --root ./fixtures \
+            --expected-access-rules 18
 
       - name: Verify JSON output (schema check)
         run: |
-          python3 ./scripts/audit_pam_ssh_mfa.py             --root ./fixtures             --json | python3 -c "import sys, json; print(json.load(sys.stdin)['overall'])"
+          python3 ./scripts/audit_pam_ssh_mfa.py \
+            --root ./fixtures \
+            --json | python3 -c "import sys, json; print(json.load(sys.stdin)['overall'])"
