@@ -12,6 +12,7 @@ This runbook matches the repo’s templates and scripts. Use it for repeatable, 
 
 - Prompt order: **TOTP verification code**, then **password** (or public key + TOTP, depending on your policy).
 - Keep at least one **break-glass path** (console/VM snapshot, etc.) while iterating.
+- See [`docs/LOCKOUT_RISK.md`](LOCKOUT_RISK.md) for a verification checklist.
 
 ## Files that matter
 

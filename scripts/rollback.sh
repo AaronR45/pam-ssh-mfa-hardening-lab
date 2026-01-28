@@ -53,6 +53,14 @@ restore_from_dir() {
     echo "[+] Restored /etc/security/time.conf"
   fi
 
+  # Validate config before restart
+  echo "[i] Validating restored sshd config..."
+  if ! sshd -t; then
+    echo "[!] WARNING: Restored config failed validation!"
+    echo "[!] Leaving files in place but NOT restarting SSH service."
+    exit 1
+  fi
+
   local svc
   svc="$(detect_service)"
   echo "[+] Restarting ${svc}..."

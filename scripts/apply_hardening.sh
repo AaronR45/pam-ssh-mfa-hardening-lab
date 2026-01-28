@@ -6,10 +6,39 @@ set -euo pipefail
 
 TS="$(date +%Y%m%d_%H%M%S)"
 BACKUP_DIR="/var/backups/pam-ssh-mfa-hardening/${TS}"
+FORCE=0
+
+# Parse arguments
+for arg in "$@"; do
+  case $arg in
+    --yes|-y)
+      FORCE=1
+      shift
+      ;;
+  esac
+done
 
 need_root() {
   if [[ "${EUID}" -ne 0 ]]; then
     echo "[!] Run as root (sudo)." >&2
+    exit 1
+  fi
+}
+
+confirm_action() {
+  if [[ "$FORCE" -eq 1 ]]; then return; fi
+  echo ""
+  echo "⚠️  WARNING: RISK OF SSH LOCKOUT ⚠️"
+  echo ""
+  echo "This script will modify SSH authentication configuration."
+  echo "1. Ensure you have an open root shell in a separate terminal."
+  echo "2. Ensure you have an out-of-band access method (console/VM)."
+  echo "3. Read docs/LOCKOUT_RISK.md if unsure."
+  echo ""
+  read -p "Are you sure you want to proceed? [y/N] " -r
+  echo
+  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Aborted."
     exit 1
   fi
 }
@@ -37,6 +66,19 @@ backup_file() {
   else
     echo "[i] Skipping backup (missing): $f"
   fi
+}
+
+rollback() {
+  echo "[!] Validation failed! Rolling back changes..."
+  if [[ -d "${BACKUP_DIR}" ]]; then
+     cp -a "${BACKUP_DIR}/"sshd_config /etc/ssh/sshd_config 2>/dev/null || true
+     cp -a "${BACKUP_DIR}/"sshd /etc/pam.d/sshd 2>/dev/null || true
+     cp -a "${BACKUP_DIR}/"access.conf /etc/security/access.conf 2>/dev/null || true
+     echo "[+] Rolled back files from ${BACKUP_DIR}"
+  else
+     echo "[!] No backup directory found at ${BACKUP_DIR}"
+  fi
+  exit 1
 }
 
 ensure_line_before_match() {
@@ -84,6 +126,7 @@ set_sshd_directive() {
 
 main() {
   need_root
+  confirm_action
 
   # Dependencies: best-effort check
   if ! command -v google-authenticator >/dev/null 2>&1; then
@@ -170,6 +213,12 @@ EOF
   # This is a lab-friendly example; tune for your real policy.
   if ! grep -Eq "^[#\s]*AuthenticationMethods\b" "$SSHD_CONF"; then
     echo "AuthenticationMethods publickey,password publickey,keyboard-interactive" >> "$SSHD_CONF"
+  fi
+
+  # Validate config
+  echo "[i] Validating sshd config..."
+  if ! sshd -t; then
+     rollback
   fi
 
   # Restart ssh
