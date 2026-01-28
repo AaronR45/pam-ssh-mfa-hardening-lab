@@ -1,81 +1,94 @@
-# PAM-Based SSH MFA & Access Controls (Linux)
+# Automated SSH Hardening & Compliance Lab
 
 ![CI Status](https://github.com/AaronR45/pam-ssh-mfa-hardening-lab/actions/workflows/ci.yml/badge.svg)
 
-A hardened, repeatable lab for enforcing **SSH multi-factor authentication (MFA)** using **PAM + Google Authenticator (TOTP)**, plus **network-aware access controls** with `pam_access` and optional **time-based login windows**.
+A production-grade implementation of **SSH Multi-Factor Authentication (MFA)** and **Network-Aware Access Control**, demonstrating automated security compliance, idempotent hardening, and policy-as-code principles.
 
-This repo is built to be *recruiter-readable*: it includes a runbook, config templates, a test matrix, and an automated compliance/audit script that produces repeatable pass/fail output.
+This repository provides a repeatable, auditable workflow for securing Linux SSH access using `pam_google_authenticator` and `pam_access`.
 
-## What this lab demonstrates
+## Core Capabilities
 
-- **SSH MFA via PAM + Google Authenticator (TOTP)**, enforcing MFA for **100% of interactive SSH logins** during validation testing.
-- **`pam_access` guardrails** in `/etc/security/access.conf` with an example policy showing **18 allow/deny rules** across **4 user groups** and **6 source networks**.
-- **Automated compliance check** (audit script + alerting hooks) to detect drift in PAM config, `sshd` settings, and access rules.
+- **Automated Hardening**: Shell scripts (`scripts/apply_hardening.sh`) that safely apply MFA and access controls with built-in preflight checks, backups, and rollback capabilities.
+- **Idempotent Deployment**: Scripts detect existing configurations to prevent duplication or drift.
+- **Policy-as-Code**: Access rules defined in `config/access.conf.example` are validated offline against a test matrix before deployment.
+- **Continuous Compliance**: An automated audit script (`scripts/audit_pam_ssh_mfa.py`) verifies that the live configuration matches the security policy.
 
-## Evidence (local / redacted)
+## CompTIA Security+ (SY0-701) Alignment
 
-A sample capture of:
-- **Time control access** via `/etc/security/time.conf` and a resulting SSH denial (page 1)
-- **Google Authenticator “Verification code” prompt** during SSH, and key `sshd_config` lines (page 2)
+This project directly maps to the following CompTIA Security+ domains and objectives:
 
-is included **locally** under `private/evidence/` (ignored by git). Use it as a reference and publish only redacted screenshots if you choose.
+| Domain | Objective | Description | Implementation |
+| :--- | :--- | :--- | :--- |
+| **1.0 General Security Concepts** | 1.2 | **Identity and Access Management (IAM)** - MFA, Access Control | Implementation of TOTP MFA and `pam_access` rules. |
+| **3.0 Security Architecture** | 3.3 | **Host Hardening** - Secure Configuration | Hardening `sshd_config` and PAM stacks. |
+| **4.0 Security Operations** | 4.1 | **Monitoring and Auditing** - Log Review, Compliance | Automated audit scripts and configuration validation. |
 
-## Repo layout
+## Quick Start
+
+### 1. Prerequisites
+
+- Linux (Debian/Ubuntu/Kali) with `openssh-server`.
+- Root access.
+
+### 2. Deployment Workflow
+
+**Step 1: Apply Hardening**
+This script backs up your configs, validates the current state, and applies the new security controls.
+```bash
+sudo ./scripts/apply_hardening.sh
+```
+
+**Step 2: Verify Compliance**
+Run the audit script to confirm the configuration aligns with the policy.
+```bash
+sudo ./scripts/audit_pam_ssh_mfa.py
+```
+
+**Step 3: Validate Access Policy (Offline)**
+Simulate access attempts against your policy file to ensure rules logic is correct.
+```bash
+python3 ./scripts/validate_access_conf.py \
+  --access-conf config/access.conf.example \
+  --matrix tests/test_matrix.csv
+```
+
+## Demonstration
+
+### Audit Output
+
+![Audit Passed](media/placeholder_audit.png)
+
+*The audit script returns `0` (PASS) only if all required security controls are active.*
+
+### MFA Prompt
+
+![MFA Prompt](media/placeholder_mfa.png)
+
+*SSH login requires a Time-Based One-Time Password (TOTP) from Google Authenticator.*
+
+## Safety & Rollback
+
+> **⚠️ Critical:** Always keep a backup root shell open when modifying SSH configurations.
+
+Refer to [`docs/LOCKOUT_RISK.md`](docs/LOCKOUT_RISK.md) for a comprehensive safety checklist.
+
+If a deployment fails validation, the script attempts an automatic rollback. To manually restore the last known good configuration:
+
+```bash
+sudo ./scripts/rollback.sh --latest
+```
+
+## Repository Structure
 
 ```
 .
-├── config/                         # Example configs (safe to publish)
-│   ├── sshd_config.example
-│   ├── pam.d.sshd.example
-│   ├── access.conf.example
-│   └── time.conf.example
-├── docs/
-│   ├── QUICKSTART.md
-│   ├── RUNBOOK.md
-│   ├── TESTING.md
-│   └── EVIDENCE_REDACTION.md
-├── scripts/
-│   ├── apply_hardening.sh          # Applies templates with backups + safety rails
-│   ├── rollback.sh                 # Restores from backups
-│   ├── audit_pam_ssh_mfa.py        # Repeatable compliance check (pass/fail + JSON)
-│   ├── validate_access_conf.py     # Offline evaluator for access.conf rule logic
-│   └── generate_test_matrix.py     # Emits CSV test matrices
-├── tests/
-│   ├── test_matrix.csv             # Example 24-case allow/deny matrix
-│   └── access_policy_expected.json # Expected policy evaluation results
-└── private/                        # Ignored by git (store screenshots, notes)
+├── config/                 # Security policy templates (Policy-as-Code)
+├── docs/                   # Operational documentation (Runbooks, Risk)
+├── media/                  # Evidence and demo assets
+├── scripts/                # Automation for hardening, rollback, and auditing
+├── tests/                  # Test matrices and fixtures
+└── .github/workflows/      # CI/CD pipeline for automated testing
 ```
-
-## Quick start
-
-Read: [`docs/QUICKSTART.md`](docs/QUICKSTART.md) for full instructions.
-
-**Typical workflow:**
-
-1. **Apply hardening** (creates backups first, prompts for confirmation)
-   ```bash
-   sudo ./scripts/apply_hardening.sh
-   ```
-
-2. **Run audit** (verify config state)
-   ```bash
-   sudo ./scripts/audit_pam_ssh_mfa.py
-   ```
-
-3. **Validate access policy** (offline test against matrix)
-   ```bash
-   python3 ./scripts/validate_access_conf.py \
-     --access-conf ./config/access.conf.example \
-     --matrix ./tests/test_matrix.csv
-   ```
-
-## Safety notes
-
-> **⚠️ Risk of Lockout:** Modifying SSH authentication carries a risk of locking yourself out.
-
-- Read **[`docs/LOCKOUT_RISK.md`](docs/LOCKOUT_RISK.md)** before applying changes.
-- Always keep a **root console / out-of-band path** open.
-- The apply script backs up files and includes a rollback helper.
 
 ## License
 

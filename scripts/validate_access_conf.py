@@ -24,9 +24,8 @@ import argparse
 import csv
 import ipaddress
 import re
-import sys
 from dataclasses import dataclass
-from typing import Iterable, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 
 RE_RULE = re.compile(r"^\s*([+-])\s*:\s*(.*?)\s*:\s*(.*?)\s*$")
@@ -34,6 +33,7 @@ RE_RULE = re.compile(r"^\s*([+-])\s*:\s*(.*?)\s*:\s*(.*?)\s*$")
 
 @dataclass
 class Rule:
+    """Represents a parsed access.conf rule."""
     action: str  # '+' or '-'
     users: str
     origins: str
@@ -48,12 +48,13 @@ def parse_tokens(expr: str) -> Tuple[List[str], List[str]]:
     if "EXCEPT" in parts:
         idx = parts.index("EXCEPT")
         inc = parts[:idx]
-        exc = parts[idx + 1 :]
+        exc = parts[idx + 1:]
         return inc, exc
     return parts, []
 
 
 def user_matches(rule_users: str, user: str, groups: List[str]) -> bool:
+    """Checks if a user matches the rule's user field."""
     inc, exc = parse_tokens(rule_users)
 
     def token_match(tok: str) -> bool:
@@ -71,6 +72,7 @@ def user_matches(rule_users: str, user: str, groups: List[str]) -> bool:
 
 
 def parse_net(tok: str) -> Optional[ipaddress.IPv4Network]:
+    """Parses a network definition (CIDR or netmask)."""
     # Accept net/mask where mask may be dotted or prefix length.
     if "/" not in tok:
         return None
@@ -87,6 +89,7 @@ def parse_net(tok: str) -> Optional[ipaddress.IPv4Network]:
 
 
 def origin_matches(rule_origins: str, origin: str) -> bool:
+    """Checks if an origin matches the rule's origin field."""
     inc, exc = parse_tokens(rule_origins)
 
     def token_match(tok: str) -> bool:
@@ -114,6 +117,7 @@ def origin_matches(rule_origins: str, origin: str) -> bool:
 
 
 def load_rules(path: str) -> List[Rule]:
+    """Parses rules from the access.conf file."""
     rules: List[Rule] = []
     with open(path, "r", encoding="utf-8", errors="replace") as f:
         for line in f:
@@ -123,11 +127,19 @@ def load_rules(path: str) -> List[Rule]:
             m = RE_RULE.match(line)
             if not m:
                 continue
-            rules.append(Rule(action=m.group(1), users=m.group(2).strip(), origins=m.group(3).strip(), raw=s))
+            rules.append(Rule(
+                action=m.group(1),
+                users=m.group(2).strip(),
+                origins=m.group(3).strip(),
+                raw=s
+            ))
     return rules
 
 
-def evaluate(rules: List[Rule], user: str, groups: List[str], origin: str) -> Optional[str]:
+def evaluate(
+    rules: List[Rule], user: str, groups: List[str], origin: str
+) -> Optional[str]:
+    """Evaluates the rule set against a specific user/origin context."""
     for r in rules:
         if user_matches(r.users, user, groups) and origin_matches(r.origins, origin):
             return "ALLOW" if r.action == "+" else "DENY"
@@ -135,8 +147,11 @@ def evaluate(rules: List[Rule], user: str, groups: List[str], origin: str) -> Op
 
 
 def main() -> int:
+    """Main entry point for the validator script."""
     ap = argparse.ArgumentParser()
-    ap.add_argument("--access-conf", required=True, help="Path to access.conf policy")
+    ap.add_argument(
+        "--access-conf", required=True, help="Path to access.conf policy"
+    )
     ap.add_argument("--matrix", required=True, help="CSV test matrix path")
     args = ap.parse_args()
 
@@ -156,13 +171,18 @@ def main() -> int:
             user = row["user"].strip()
             origin = row["origin"].strip()
             expected = row["expected"].strip().upper()
-            groups = [g.strip() for g in row.get("groups", "").split(",") if g.strip()]
+            groups = [
+                g.strip() for g in row.get("groups", "").split(",") if g.strip()
+            ]
             got = evaluate(rules, user, groups, origin) or "NO_MATCH"
             ok = (got == expected)
             if ok:
                 passed += 1
             else:
-                failed_rows.append(f"row {total}: user={user} groups={groups} origin={origin} expected={expected} got={got}")
+                failed_rows.append(
+                    f"row {total}: user={user} groups={groups} origin={origin} "
+                    f"expected={expected} got={got}"
+                )
 
     print(f"Results: {passed}/{total} passed ({(passed/total*100):.1f}%)")
     if failed_rows:

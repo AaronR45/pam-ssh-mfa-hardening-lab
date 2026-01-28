@@ -16,6 +16,21 @@ jobs:
           python-version: '3.10'
           cache: 'pip'
 
+      - name: Linting
+        run: |
+          pip install flake8
+          # Stop the build if there are Python syntax errors or undefined names
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+          # ShellCheck
+          if command -v shellcheck &> /dev/null; then
+            shellcheck scripts/*.sh
+          else
+            echo "ShellCheck not found, skipping."
+          fi
+
       - name: Offline access policy validation
         run: |
           python3 ./scripts/validate_access_conf.py             --access-conf ./config/access.conf.example             --matrix ./tests/test_matrix.csv
