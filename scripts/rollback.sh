@@ -80,7 +80,7 @@ main() {
 
   if [[ "$1" == "--latest" ]]; then
     local latest
-    latest="$(ls -1 "${BASE}" 2>/dev/null | sort | tail -n 1 || true)"
+    latest="$(find "${BASE}" -mindepth 1 -maxdepth 1 -type d -print 2>/dev/null | sort | tail -n 1 | awk -F/ '{print $NF}' || true)"
     [[ -n "$latest" ]] || { echo "[!] No backups found in ${BASE}" >&2; exit 1; }
     restore_from_dir "${BASE}/${latest}"
     exit 0
