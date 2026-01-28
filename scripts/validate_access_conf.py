@@ -190,6 +190,9 @@ def main() -> int:
         for fr in failed_rows:
             print("  - " + fr)
         return 2
+
+    if passed == total:
+        print("[SUCCESS] Policy Verified")
     return 0
 
 

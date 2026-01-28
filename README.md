@@ -90,6 +90,13 @@ sudo ./scripts/rollback.sh --latest
 └── .github/workflows/      # CI/CD pipeline for automated testing
 ```
 
+## Maintenance Log
+
+| Timestamp | Date | Version Tag | Summary of Change |
+| :--- | :--- | :--- | :--- |
+| 2025-05-20 14:00 EST | May 20, 2025 | v1.0.0-stable | Initial production release with automated auditing and compliance checking. |
+| 2025-05-21 10:00 EST | May 21, 2025 | v1.0.1-patch | Fixed CI pathing for Ubuntu runners and enhanced policy verification output. |
+
 ## License
 
 MIT (see `LICENSE`).

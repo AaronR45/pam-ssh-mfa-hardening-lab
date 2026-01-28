@@ -290,9 +290,14 @@ def audit_access_conf(
 
 def main() -> int:
     """Main entry point for the audit script."""
+    # Detect CI environment
+    default_root = "/"
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        default_root = "./fixtures"
+
     ap = argparse.ArgumentParser()
     ap.add_argument(
-        "--root", default="/",
+        "--root", default=default_root,
         help="Alternate root (for mounted images / fixtures)"
     )
     ap.add_argument(

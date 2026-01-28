@@ -16,6 +16,12 @@ jobs:
           python-version: '3.10'
           cache: 'pip'
 
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpam-google-authenticator
+          chmod +x scripts/*.py
+
       - name: Linting
         run: |
           pip install -r requirements.txt
