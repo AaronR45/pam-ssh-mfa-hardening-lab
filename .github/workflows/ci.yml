@@ -13,7 +13,23 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Linting
+        run: |
+          pip install -r requirements.txt
+          # Stop the build if there are Python syntax errors or undefined names
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+          
+          # ShellCheck
+          if command -v shellcheck &> /dev/null; then
+            shellcheck scripts/*.sh
+          else
+            echo "ShellCheck not found, skipping."
+          fi
 
       - name: Offline access policy validation
         run: |
@@ -22,3 +38,7 @@ jobs:
       - name: Fixture-based audit (no sudo required)
         run: |
           python3 ./scripts/audit_pam_ssh_mfa.py             --root ./fixtures             --expected-access-rules 18
+
+      - name: Verify JSON output (schema check)
+        run: |
+          python3 ./scripts/audit_pam_ssh_mfa.py             --root ./fixtures             --json | python3 -c "import sys, json; print(json.load(sys.stdin)['overall'])"
