@@ -23,3 +23,8 @@ svc1,ssh_service,10.20.5.50,DENY
 svc2,ssh_service,192.168.10.51,ALLOW
 svc2,ssh_service,172.16.10.51,ALLOW
 svc2,ssh_service,192.168.64.51,DENY
+root,root,LOCAL,ALLOW
+root,root,10.8.0.5,ALLOW
+root,root,192.168.1.1,DENY
+unknown_user,nogroup,10.8.0.10,DENY
+unknown_user,nogroup,LOCAL,DENY

@@ -14,6 +14,22 @@ Run:
 Exit codes:
   0 = all required checks pass
   2 = one or more required checks failed
+
+JSON Output Schema:
+  {
+    "overall": "PASS" | "FAIL",
+    "missing_files": [ "path/to/missing/file", ... ],
+    "results": [
+      {
+        "id": "check_id",
+        "description": "Description of the check",
+        "passed": true | false,
+        "details": "Details about the result",
+        "severity": "required" | "optional"
+      },
+      ...
+    ]
+  }
 """
 
 from __future__ import annotations

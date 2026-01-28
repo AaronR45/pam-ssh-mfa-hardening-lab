@@ -1,5 +1,7 @@
 # PAM-Based SSH MFA & Access Controls (Linux)
 
+![CI Status](https://github.com/AaronR45/pam-ssh-mfa-hardening-lab/actions/workflows/ci.yml/badge.svg)
+
 A hardened, repeatable lab for enforcing **SSH multi-factor authentication (MFA)** using **PAM + Google Authenticator (TOTP)**, plus **network-aware access controls** with `pam_access` and optional **time-based login windows**.
 
 This repo is built to be *recruiter-readable*: it includes a runbook, config templates, a test matrix, and an automated compliance/audit script that produces repeatable pass/fail output.
@@ -46,31 +48,34 @@ is included **locally** under `private/evidence/` (ignored by git). Use it as a 
 
 ## Quick start
 
-Read: [`docs/QUICKSTART.md`](docs/QUICKSTART.md)
+Read: [`docs/QUICKSTART.md`](docs/QUICKSTART.md) for full instructions.
 
-Typical workflow:
+**Typical workflow:**
 
-1. Apply hardening (creates backups first)
+1. **Apply hardening** (creates backups first, prompts for confirmation)
    ```bash
    sudo ./scripts/apply_hardening.sh
    ```
 
-2. Run audit
+2. **Run audit** (verify config state)
    ```bash
    sudo ./scripts/audit_pam_ssh_mfa.py
-   # or output JSON for CI / logging:
-   sudo ./scripts/audit_pam_ssh_mfa.py --json
    ```
 
-3. Validate access policy against the included 24-case matrix (offline)
+3. **Validate access policy** (offline test against matrix)
    ```bash
-   python3 ./scripts/validate_access_conf.py      --access-conf ./config/access.conf.example      --matrix ./tests/test_matrix.csv
+   python3 ./scripts/validate_access_conf.py \
+     --access-conf ./config/access.conf.example \
+     --matrix ./tests/test_matrix.csv
    ```
 
 ## Safety notes
 
-- Always keep a **root console / out-of-band path** open before changing SSH auth.
-- The apply script backs up files and includes a rollback helper, but you’re still changing authentication—work carefully.
+> **⚠️ Risk of Lockout:** Modifying SSH authentication carries a risk of locking yourself out.
+
+- Read **[`docs/LOCKOUT_RISK.md`](docs/LOCKOUT_RISK.md)** before applying changes.
+- Always keep a **root console / out-of-band path** open.
+- The apply script backs up files and includes a rollback helper.
 
 ## License
 

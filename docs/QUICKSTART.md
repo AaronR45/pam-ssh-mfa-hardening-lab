@@ -1,6 +1,7 @@
 # Quickstart (Debian/Kali/Ubuntu)
 
-> This project changes SSH authentication. Keep a local console session open.
+> **⚠️ Warning:** This project changes SSH authentication. You risk locking yourself out.
+> **Read [`docs/LOCKOUT_RISK.md`](LOCKOUT_RISK.md) before proceeding.**
 
 ## 1) Prereqs
 
