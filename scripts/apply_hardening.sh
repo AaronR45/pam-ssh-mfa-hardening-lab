@@ -6,10 +6,62 @@ set -euo pipefail
 
 TS="$(date +%Y%m%d_%H%M%S)"
 BACKUP_DIR="/var/backups/pam-ssh-mfa-hardening/${TS}"
+FORCE=0
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1" >&2
+}
+
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+# Parse arguments
+for arg in "$@"; do
+  case $arg in
+    --yes|-y)
+      FORCE=1
+      shift
+      ;;
+  esac
+done
 
 need_root() {
   if [[ "${EUID}" -ne 0 ]]; then
-    echo "[!] Run as root (sudo)." >&2
+    log_error "Run as root (sudo)."
+    exit 1
+  fi
+}
+
+confirm_action() {
+  if [[ "$FORCE" -eq 1 ]]; then return; fi
+  echo ""
+  echo -e "${YELLOW}⚠️  WARNING: RISK OF SSH LOCKOUT ⚠️${NC}"
+  echo ""
+  echo "This script will modify SSH authentication configuration."
+  echo "1. Ensure you have an open root shell in a separate terminal."
+  echo "2. Ensure you have an out-of-band access method (console/VM)."
+  echo "3. Read docs/LOCKOUT_RISK.md if unsure."
+  echo ""
+  read -p "Are you sure you want to proceed? [y/N] " -r
+  echo
+  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    log_info "Aborted."
     exit 1
   fi
 }
@@ -33,10 +85,23 @@ backup_file() {
   if [[ -f "$f" ]]; then
     mkdir -p "${BACKUP_DIR}"
     cp -a "$f" "${BACKUP_DIR}/"
-    echo "[+] Backed up $f -> ${BACKUP_DIR}/"
+    log_info "Backed up $f -> ${BACKUP_DIR}/"
   else
-    echo "[i] Skipping backup (missing): $f"
+    log_info "Skipping backup (missing): $f"
   fi
+}
+
+rollback() {
+  log_error "Validation failed! Rolling back changes..."
+  if [[ -d "${BACKUP_DIR}" ]]; then
+     cp -a "${BACKUP_DIR}/"sshd_config /etc/ssh/sshd_config 2>/dev/null || true
+     cp -a "${BACKUP_DIR}/"sshd /etc/pam.d/sshd 2>/dev/null || true
+     cp -a "${BACKUP_DIR}/"access.conf /etc/security/access.conf 2>/dev/null || true
+     log_info "Rolled back files from ${BACKUP_DIR}"
+  else
+     log_error "No backup directory found at ${BACKUP_DIR}"
+  fi
+  exit 1
 }
 
 ensure_line_before_match() {
@@ -84,10 +149,18 @@ set_sshd_directive() {
 
 main() {
   need_root
+  confirm_action
+
+  # Preflight check: Ensure current config is valid before doing anything
+  log_info "Preflight: validating current sshd config..."
+  if ! sshd -t; then
+    log_error "Current sshd config is invalid. Fix it before applying changes."
+    exit 1
+  fi
 
   # Dependencies: best-effort check
   if ! command -v google-authenticator >/dev/null 2>&1; then
-    echo "[i] google-authenticator binary not found. Installing libpam-google-authenticator..."
+    log_info "google-authenticator binary not found. Installing libpam-google-authenticator..."
     apt-get update -y
     apt-get install -y libpam-google-authenticator
   fi
@@ -102,7 +175,7 @@ main() {
 
   # ---- PAM: enforce MFA and pam_access ----
   if [[ ! -f "$PAM_SSHD" ]]; then
-    echo "[!] Missing $PAM_SSHD. Is openssh-server installed?" >&2
+    log_error "Missing $PAM_SSHD. Is openssh-server installed?"
     exit 1
   fi
 
@@ -150,14 +223,14 @@ main() {
 - : ALL : ALL
 # === End seeded block ===
 EOF
-    echo "[+] Seeded $ACCESS_CONF with example policy block."
+    log_success "Seeded $ACCESS_CONF with example policy block."
   else
-    echo "[i] $ACCESS_CONF already has rules; leaving as-is."
+    log_info "$ACCESS_CONF already has rules; leaving as-is."
   fi
 
   # ---- sshd_config ----
   if [[ ! -f "$SSHD_CONF" ]]; then
-    echo "[!] Missing $SSHD_CONF. Is openssh-server installed?" >&2
+    log_error "Missing $SSHD_CONF. Is openssh-server installed?"
     exit 1
   fi
 
@@ -172,10 +245,16 @@ EOF
     echo "AuthenticationMethods publickey,password publickey,keyboard-interactive" >> "$SSHD_CONF"
   fi
 
+  # Validate config
+  log_info "Validating sshd config..."
+  if ! sshd -t; then
+     rollback
+  fi
+
   # Restart ssh
   local svc
   svc="$(detect_service)"
-  echo "[+] Restarting ${svc}..."
+  log_info "Restarting ${svc}..."
   if command -v systemctl >/dev/null 2>&1; then
     systemctl restart "${svc}"
     systemctl --no-pager status "${svc}" || true
@@ -184,8 +263,8 @@ EOF
   fi
 
   echo
-  echo "[✓] Applied. Backups: ${BACKUP_DIR}"
-  echo "[✓] Next: run audit -> sudo ./scripts/audit_pam_ssh_mfa.py"
+  log_success "Applied. Backups: ${BACKUP_DIR}"
+  log_success "Next: run audit -> sudo ./scripts/audit_pam_ssh_mfa.py"
 }
 
 main "$@"
